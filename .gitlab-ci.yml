@@ -1,0 +1,85 @@
+# Check the version of node with your project !!
+image: node:16
+
+# Cache dependencies jobs
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - node_modules/
+
+# Define pipeline 
+stages:
+  - build
+  - test
+  - security
+  - deploy
+
+# Include security templates
+include:
+  - template: Security/SAST.gitlab-ci.yml
+  - template: Security/Dependency-Scanning.gitlab-ci.yml
+
+# Variables available to all jobs
+variables:
+  NODE_ENV: "development"
+
+# Build 
+build:
+  stage: build
+  script:
+    - npm install
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 week
+
+# Testing stage 
+unit_tests:
+  stage: test
+  script:
+    - npm run test:unit
+  coverage: '/Coverage: \d+\.\d+%/'
+
+integration_tests:
+  stage: test
+  script:
+    - npm run test:integration
+  allow_failure: true
+
+# Security 
+sast:
+  stage: security
+  extends: .sast
+
+dependency_scanning:
+  stage: security
+
+# Deployment 
+deploy_staging:
+  stage: deploy
+  script:
+    - echo "Deploying to staging environment"
+    - npm run deploy:staging
+  environment:
+    name: staging
+  only:
+    - develop
+
+deploy_production:
+  stage: deploy
+  script:
+    - echo "Deploying to production environment"
+    - npm run deploy:production
+  environment:
+    name: production
+  only:
+    - main
+  when: manual
+
+# Global 
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH != "main" && $CI_PIPELINE_SOURCE != "merge_request_event"
+      when: never
+    - when: always
